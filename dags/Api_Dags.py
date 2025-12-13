@@ -9,7 +9,6 @@ from airflow.hooks.base import BaseHook
 def api_comb(**context):
     import psycopg2
     import ast
-    import psycopg2
     from requests import get
     import pendulum
     conn = BaseHook.get_connection(conn_id='conn_pg')
@@ -75,6 +74,65 @@ def api_comb(**context):
             insert_data['created_at']
         ))
         connection.commit()
+def Tableagg(**context):
+    import psycopg2
+    conn = BaseHook.get_connection(conn_id='conn_pg')
+    EndDate = pendulum.parse(context['ds']).subtract(days=1).to_date_string()
+    StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
+    connection = psycopg2.connect(
+        dbname='etl',
+        user=conn.login,
+        password=conn.password,
+        host=conn.host,
+        port=conn.port
+    )
+    cur = connection.cursor()
+    cur.execute(
+        """
+        SELECT lti_user_id, created_at, count(is_correct) as total_At, sum(is_correct) as True_At
+        FROM UserSkilF
+        WHERE created_at >= %s
+          AND created_at <= %s
+          group by lti_user_id, created_at
+        """,
+        (StartDate, EndDate)  # Параметры передаются отдельно!
+    )
+    rows = cur.fetchall()
+    column_names = [desc[0] for desc in cur.description]
+
+    # 4. Формируем CSV в памяти
+    csv_buffer = io.StringIO()
+    writer = csv.writer(csv_buffer)
+    writer.writerow(column_names)  # заголовки
+    for row in rows:
+        writer.writerow(row)  # данные
+
+    # 5. Получаем параметры подключения к S3 через BaseHook
+    s3_conn = BaseHook.get_connection('my_s3_conn')  # ваш Conn Id
+
+    # Формируем параметры для boto3
+    s3_params = {
+        'aws_access_key_id': s3_conn.login,
+        'aws_secret_access_key': s3_conn.password,
+        'region_name': s3_conn.extra_dejson.get('region_name', 'ru-central1')  # регион из Extra
+    }
+
+    # 6. Загружаем в S3
+    s3 = boto3.client('s3', **s3_params)
+
+    s3.put_object(
+        Bucket='ваш-бакет',
+        Key='путь/к/файлу/output.csv',
+        Body=csv_buffer.getvalue(),
+        ContentType='text/csv'
+    )
+
+    # 7. Закрываем ресурсы
+    csv_buffer.close()
+    cur.close()
+    connection.close()
+
+    print("CSV успешно загружен в S3")
 
 DEFAULT_ARGS = {
     'owner': 'admin',
@@ -83,7 +141,7 @@ DEFAULT_ARGS = {
     'start_date': datetime(2025, 12, 12),
 }
 with DAG(
-    dag_id="combineApiData",
+    dag_id="combineApiData77",
     tags=['admin', '4'],
     schedule='@daily',
     default_args=DEFAULT_ARGS,
