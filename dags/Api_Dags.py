@@ -4,12 +4,22 @@ from airflow import DAG
 from airflow.operators.empty import EmptyOperator
 from airflow.operators.python import PythonOperator
 from airflow.hooks.base import BaseHook
-
-
+def End(EndDate,**context):
+    import pendulum
+    end = pendulum.parse(EndDate).subtract(days=1).to_date_string()
+    return end
+    StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
+def Start(StartDate,**context):
+    import pendulum
+    end = pendulum.parse(StartDate).subtract(days=1).to_date_string()
+    start = pendulum.parse(end).subtract(days=7).to_date_string()
+    return start
 def api_comb(**context):
     import psycopg2
     import ast
+    import psycopg2
     from requests import get
+    import psycopg2
     import pendulum
     conn = BaseHook.get_connection(conn_id='conn_pg')
 
@@ -32,8 +42,8 @@ def api_comb(**context):
             created_at TIMESTAMP
         )
     ''')
-    EndDate = pendulum.parse(context['ds']).subtract(days=1).to_date_string()
-    StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
+    #EndDate = pendulum.parse(context['ds']).subtract(days=1).to_date_string()
+    #StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
     URL = 'https://b2b.itresume.ru/api/statistics'
     params = {'client': 'Skillfactory',
               'client_key': 'M2MGWS',
@@ -77,8 +87,8 @@ def api_comb(**context):
 def Tableagg(**context):
     import psycopg2
     conn = BaseHook.get_connection(conn_id='conn_pg')
-    EndDate = pendulum.parse(context['ds']).subtract(days=1).to_date_string()
-    StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
+    #EndDate = pendulum.parse(context['ds']).subtract(days=1).to_date_string()
+    # StartDate = pendulum.parse(endDate).subtract(days=7).to_date_string()
     connection = psycopg2.connect(
         dbname='etl',
         user=conn.login,
@@ -108,7 +118,7 @@ def Tableagg(**context):
         writer.writerow(row)  # данные
 
     # 5. Получаем параметры подключения к S3 через BaseHook
-    s3_conn = BaseHook.get_connection('my_s3_conn')  # ваш Conn Id
+    s3_conn = BaseHook.get_connection('conn_s3')  # ваш Conn Id
 
     # Формируем параметры для boto3
     s3_params = {
@@ -141,15 +151,15 @@ DEFAULT_ARGS = {
     'start_date': datetime(2025, 12, 12),
 }
 with DAG(
-    dag_id="combineApiData77",
+    dag_id="combineApiData",
     tags=['admin', '4'],
     schedule='@daily',
     default_args=DEFAULT_ARGS,
     max_active_runs=1,
-    max_active_tasks=1
+    max_active_tasks=1,
+    user_defined_macros={"EndDate": End,"StartDate": Start },
 ) as dag:
-
     dag_start = EmptyOperator(task_id='dag_start')
     dag_end = EmptyOperator(task_id='dag_end')
-    ExtractApi =PythonOperator(task_id='dag_extract',python_callable=api_comb)
+    ExtractApi =PythonOperator(task_id='dag_extract',python_callable=api_comb,op_kwargs={"EndDate": '{{ End(ds) }}',"StartDate":'{{ Start(ds) }}'})
 dag_start >> ExtractApi >> dag_end
