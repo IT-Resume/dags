@@ -19,7 +19,7 @@ RAW_TABLE = 'Yarilo_table'
 AGG_TABLE = 'Yarilo_agg_table'
 
 DEFAULT_ARGS = {
-    'owner': 'admin',
+    'owner': 'yarilo',
     'retries': 2,
     'retry_delay': 600,
     'start_date': datetime(2024, 11, 12),
@@ -174,7 +174,7 @@ def upload_agg(**context):
 
 
 with DAG(
-        dag_id="iakotov_pz1",
+        dag_id="YARILO",
         tags=['4', 'admin'],
         schedule='@daily',
         default_args=DEFAULT_ARGS,
